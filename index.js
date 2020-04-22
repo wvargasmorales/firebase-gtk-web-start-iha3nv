@@ -85,7 +85,7 @@ form.addEventListener("submit", (e) => {
    name: firebase.auth().currentUser.displayName,
    userId: firebase.auth().currentUser.uid
  })
- // clear message input field
+ // clear message input field.
  input.value = ""; 
  // Return false to avoid redirect
  return false;
