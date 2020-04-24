@@ -10,7 +10,7 @@ import "firebase/firestore";
 import * as firebaseui from 'firebaseui';
 
 // Document elements
-const startRsvpButton = document.getElementById('startRsvp');
+const startRsvpButton = document.getElementById('startSRVP');
 const guestbookContainer = document.getElementById('guestbook-container');
 
 const form = document.getElementById('leave-message');
@@ -33,60 +33,129 @@ const firebaseConfig = {
   messagingSenderId: "587163913152",
   appId: "1:587163913152:web:5fa6e4d77d8c7daf5b9625"
 };
+
 firebase.initializeApp(firebaseConfig);
 
 // FirebaseUI config
 const uiConfig = {
-  credentialHelper: firebaseui.auth.CredentialHelper.NONE,
-  signInOptions: [
-    // Email / Password Provider.
-    firebase.auth.EmailAuthProvider.PROVIDER_ID
-  ],
-  callbacks: {
-    signInSuccessWithAuthResult: function(authResult, redirectUrl){
-      // Handle sign-in.
-      // Return false to avoid redirect.
-      return false;
-    }
-  }
+credentialHelper: firebaseui.auth.CredentialHelper.NONE,
+signInOptions: [
+// Email / Password Provider.
+firebase.auth.EmailAuthProvider.PROVIDER_ID
+],
+callbacks: {
+signInSuccessWithAuthResult: function(authResult, redirectUrl){
+// Handle sign-in.
+// Return false to avoid redirect.
+return false;
+}
+}
 };
 
 const ui = new firebaseui.auth.AuthUI(firebase.auth());
 
-//Evento del boton
 startRsvpButton.addEventListener("click", ()=> {
-
-  if (firebase.auth().currentUser) {
-    firebase.auth().signOut();
-  }else{
-    ui.start("#firebaseui-auth-container", uiConfig);
-  }
+if (firebase.auth().currentUser) {
+firebase.auth().signOut();
+} else {
+ui.start("#firebaseui-auth-container", uiConfig);
+}
 });
 
-// Si ya está autenticado no muestre el boton
 firebase.auth().onAuthStateChanged((user)=> {
-  if (user) {
-    startRsvpButton.textContent = "LOGOUT" ;
-    guestbookContainer.style.display = "block" ;
-  }else  {
-    startRsvpButton.textContent = "RSVP";
-    guestbookContainer.style.display = "none" ;
-  }
+if (user) {
+startRsvpButton.textContent = "LOGOUT";
+guestbookContainer.style.display = "block";
+subscribeGuestbook();
+subscribeCurrentRSVP(user);
+} else {
+startRsvpButton.textContent = "RSVP";
+guestbookContainer.style.display = "none";
+unsubscribeGuestbook();
+unsubscriberCurrentRSVP();
+}
 });
 
-// Listen to the form submission
-form.addEventListener("submit", (e) => {
- // Prevent the default form redirect
- e.preventDefault();
- // Write a new message to the database collection "guestbook"
- firebase.firestore().collection("guestbook").add({
-   text: input.value,
-   timestamp: Date.now(),
-   name: firebase.auth().currentUser.displayName,
-   userId: firebase.auth().currentUser.uid
- })
- // clear message input field.
- input.value = ""; 
- // Return false to avoid redirect
- return false;
+form.addEventListener("submit", (e)=> {
+e.preventDefault();
+
+firebase.firestore().collection("guestbook").add({
+text: input.value,
+timestamp: Date.now(),
+name: firebase.auth().currentUser.displayName,
+userId: firebase.auth().currentUser.uid
 });
+
+input.value = "";
+return false;
+});
+
+function subscribeGuestbook(){
+  guestbookListener = firebase.firestore().collection("guestbook")
+  .orderBy("timestamp", "desc")
+  .onSnapshot((snaps) => {
+    guestbook.innerHTML = "";
+    snaps.forEach((doc)=>{
+      const entry = document.createElement("p");
+      entry.textContent = doc.data().name + ": " + doc.data().text;
+      guestbook.appendChild(entry);
+    });
+  });
+};
+
+function unsubscribeGuestbook(){
+  if (guestbookListener != null){
+    guestbookListener();
+    guestbookListener = null;
+  }
+}
+
+rsvpYes.onclick = () => {
+  const userDoc = firebase.firestore().collection('attendees')
+  .doc(firebase.auth().currentUser.uid);
+  userDoc.set({
+    attending: true
+  }).catch(console.error);
+}
+
+rsvpNo.onclick = () => {
+    const userDoc = firebase.firestore().collection('attendees')
+  .doc(firebase.auth().currentUser.uid);
+  userDoc.set({
+    attending: false
+  }).catch(console.error);
+}
+
+firebase.firestore().collection('attendees')
+.where("attending", "==", true).onSnapshot((snap)=>{
+  const newAttendeeCount = snap.docs.length;
+  numberAttending.innerHTML = newAttendeeCount + ' people going';
+});
+
+function subscribeCurrentRSVP(user) {
+  rsvpListener = firebase.firestore().collection('attendees')
+  .doc(user.uid).onSnapshot((doc)=> {
+    if (doc && doc.data()){
+      const attendingResponse = doc.data().attending;
+
+      if (attendingResponse) {
+        rsvpYes.className="clicked";
+        rsvpNo.className="";
+      }else{
+        rsvpYes.className="";
+        rsvpNo.className="clicked";
+
+      }
+    }
+  });
+}
+
+function unsubscriberCurrentRSVP() {
+  if (rsvpListener != null) {
+    rsvpListener();
+    rsvpListener = null;
+  }
+  rsvpYes.className="";
+  rsvpNo.className="";
+
+}
